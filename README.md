@@ -14,8 +14,6 @@ agent_architecture/
     short_term.py           # Short-term memory context
   examples/
     short_term_memory.py    # Runnable example
-memory/
-  short-term-memory.py      # Blog-friendly entrypoint
 ```
 
 ## Run the short-term memory example
@@ -23,7 +21,7 @@ memory/
 From this folder:
 
 ```bash
-uv run python memory/short-term-memory.py
+uv run short-term-memory
 ```
 
 Or run the project entry file:
@@ -32,10 +30,10 @@ Or run the project entry file:
 uv run python main.py
 ```
 
-Or use the project script:
+Or run the module directly:
 
 ```bash
-uv run short-term-memory
+uv run python -m agent_architecture.examples.short_term_memory
 ```
 
 You can override the local model with environment variables:
