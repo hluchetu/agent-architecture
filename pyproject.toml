@@ -1,0 +1,20 @@
+[project]
+name = "agent-architecture"
+version = "0.1.0"
+description = "Study notes and code sketches for agent architecture patterns."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.14.1",
+]
+
+[project.scripts]
+short-term-memory = "agent_architecture.examples.short_term_memory:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_architecture"]
