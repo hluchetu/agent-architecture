@@ -13,15 +13,15 @@ agent_architecture/
     items.py                # Typed memory item models
     short_term.py           # Short-term memory context
   examples/
-    short_term_memory.py    # Runnable example
+    ollama_chat_demo.py     # Runnable Ollama demo
 ```
 
-## Run the short-term memory example
+## Run the Ollama chat demo
 
 From this folder:
 
 ```bash
-uv run short-term-memory
+uv run ollama-chat-demo
 ```
 
 Or run the project entry file:
@@ -33,7 +33,7 @@ uv run python main.py
 Or run the module directly:
 
 ```bash
-uv run python -m agent_architecture.examples.short_term_memory
+uv run python -m agent_architecture.examples.ollama_chat_demo
 ```
 
 You can override the local model with environment variables:

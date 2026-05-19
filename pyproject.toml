@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-short-term-memory = "agent_architecture.examples.short_term_memory:main"
+ollama-chat-demo = "agent_architecture.examples.ollama_chat_demo:main"
 
 [build-system]
 requires = ["hatchling"]
