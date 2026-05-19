@@ -12,6 +12,7 @@ from agent_architecture.memory.items import (
     ToolCallItem,
     ToolResultItem,
 )
+from agent_architecture.observability import EventLog, ObservabilityEvent
 
 
 class ChatContext:
@@ -22,9 +23,47 @@ class ChatContext:
     not everything the system remembers should be sent directly to the model.
     """
 
-    def __init__(self, session_id: str | None = None) -> None:
+    def __init__(
+        self,
+        session_id: str | None = None,
+        *,
+        event_log: EventLog | None = None,
+    ) -> None:
         self.session_id = session_id or str(uuid4())
         self.items: list[ContextItem] = []
+        self.event_log = event_log
+
+    def _emit(
+        self,
+        name: str,
+        context_item: ContextItem | None = None,
+        **payload: Any,
+    ) -> None:
+        if self.event_log is None:
+            return
+
+        self.event_log.emit(
+            ObservabilityEvent(
+                name=name,
+                session_id=self.session_id,
+                turn_id=(
+                    context_item.turn_id
+                    if context_item
+                    else payload.pop("turn_id", None)
+                ),
+                payload=payload,
+            )
+        )
+
+    def _append(self, item: ContextItem) -> None:
+        self.items.append(item)
+        self._emit(
+            "memory.item_added",
+            item,
+            item_kind=item.kind,
+            item_id=item.id,
+            item=item.model_dump(mode="json"),
+        )
 
     def new_turn_id(self) -> str:
         return str(uuid4())
@@ -42,7 +81,7 @@ class ChatContext:
             role=role,
             content=content,
         )
-        self.items.append(item)
+        self._append(item)
         return item
 
     def add_tool_call(
@@ -58,7 +97,7 @@ class ChatContext:
             name=name,
             arguments=arguments,
         )
-        self.items.append(item)
+        self._append(item)
         return item
 
     def add_tool_result(
@@ -76,7 +115,7 @@ class ChatContext:
             result=result,
             error=error,
         )
-        self.items.append(item)
+        self._append(item)
         return item
 
     def add_event(
@@ -92,12 +131,12 @@ class ChatContext:
             name=name,
             data=data or {},
         )
-        self.items.append(item)
+        self._append(item)
         return item
 
     def add_summary(self, content: str) -> SummaryItem:
         item = SummaryItem(session_id=self.session_id, content=content)
-        self.items.append(item)
+        self._append(item)
         return item
 
     def messages_for_llm(self) -> list[dict[str, str]]:
@@ -116,6 +155,12 @@ class ChatContext:
             elif isinstance(item, MessageItem):
                 messages.append({"role": item.role, "content": item.content})
 
+        self._emit(
+            "memory.context_built",
+            message_count=len(messages),
+            total_item_count=len(self.items),
+            messages=messages,
+        )
         return messages
 
     def compact(self, max_items: int) -> None:
@@ -132,12 +177,18 @@ class ChatContext:
         ]
         recent_items = self.items[-max_items:]
 
+        before_count = len(self.items)
         self.items = system_messages + [
             item for item in recent_items if item not in system_messages
         ]
+        self._emit(
+            "memory.compacted",
+            before_count=before_count,
+            after_count=len(self.items),
+            max_items=max_items,
+        )
 
     def dump(self) -> list[dict[str, Any]]:
         """Return a serializable view useful for debugging and tests."""
 
         return [item.model_dump(mode="json") for item in self.items]
-

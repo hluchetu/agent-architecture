@@ -12,6 +12,9 @@ agent_architecture/
   memory/
     items.py                # Typed memory item models
     short_term.py           # Short-term memory context
+  observability/
+    events.py               # Structured event model
+    log.py                  # Human-readable event log
   examples/
     ollama_chat_demo.py     # Runnable Ollama demo
 ```
@@ -54,3 +57,4 @@ The current example shows a LiveKit-inspired short-term memory pattern:
 - `SummaryItem` stores compacted older context.
 - `messages_for_llm()` builds the model-facing view.
 - `OllamaClient` sends that view to your local Ollama model.
+- `EventLog` shows memory writes, tool calls, tool results, context builds, and LLM requests/responses.
