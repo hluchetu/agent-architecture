@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma3:4b"
+    ollama_embedding_model: str = "nomic-embed-text"
     ollama_timeout_seconds: float = 120.0
     max_context_items: int = Field(default=20, ge=1)
 

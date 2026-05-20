@@ -5,6 +5,7 @@ description = "Study notes and code sketches for agent architecture patterns."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "chromadb>=1.5.9",
     "httpx>=0.28.1",
     "pydantic-settings>=2.14.1",
 ]

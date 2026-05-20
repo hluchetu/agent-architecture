@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 
 from agent_architecture.config import Settings
+from agent_architecture.llm.response import LLMResponse
 from agent_architecture.observability import EventLog, ObservabilityEvent
 
 
@@ -18,7 +21,19 @@ class OllamaClient:
         self.settings = settings or Settings()
         self.event_log = event_log
 
-    async def chat(self, messages: list[dict[str, str]]) -> str:
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> LLMResponse:
+        payload: dict[str, Any] = {
+            "model": self.settings.ollama_model,
+            "messages": messages,
+            "stream": False,
+        }
+        if tools:
+            payload["tools"] = tools
+
         self._emit(
             "llm.request",
             model=self.settings.ollama_model,
@@ -30,22 +45,24 @@ class OllamaClient:
         ) as client:
             response = await client.post(
                 f"{self.settings.ollama_base_url.rstrip('/')}/api/chat",
-                json={
-                    "model": self.settings.ollama_model,
-                    "messages": messages,
-                    "stream": False,
-                },
+                json=payload,
             )
 
         response.raise_for_status()
         data = response.json()
-        reply: str = data["message"]["content"]
+        message = data["message"]
+
+        content: str = message.get("content", "")
+        tool_calls: list[dict[str, Any]] = message.get("tool_calls") or []
+
         self._emit(
             "llm.response",
             model=self.settings.ollama_model,
-            content=reply,
+            content=content,
+            tool_calls=tool_calls,
         )
-        return reply
+
+        return LLMResponse(content=content, tool_calls=tool_calls)
 
     def _emit(self, name: str, **payload: object) -> None:
         if self.event_log is None:
