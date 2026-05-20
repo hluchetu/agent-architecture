@@ -12,6 +12,7 @@ from agent_architecture.memory.items import (
     ToolCallItem,
     ToolResultItem,
 )
+from agent_architecture.memory.session_store import SessionStore
 from agent_architecture.observability import EventLog, ObservabilityEvent
 
 
@@ -28,10 +29,12 @@ class ChatContext:
         session_id: str | None = None,
         *,
         event_log: EventLog | None = None,
+        max_context_items: int = 20,
     ) -> None:
         self.session_id = session_id or str(uuid4())
         self.items: list[ContextItem] = []
         self.event_log = event_log
+        self.max_context_items = max_context_items
 
     def _emit(
         self,
@@ -64,6 +67,8 @@ class ChatContext:
             item_id=item.id,
             item=item.model_dump(mode="json"),
         )
+        if len(self.items) > self.max_context_items:
+            self.compact(self.max_context_items)
 
     def new_turn_id(self) -> str:
         return str(uuid4())
@@ -139,10 +144,30 @@ class ChatContext:
         self._append(item)
         return item
 
-    def messages_for_llm(self) -> list[dict[str, str]]:
+    def resume(self, store: SessionStore) -> bool:
+        raw = store.load(self.session_id)
+        if raw is None:
+            return False
+
+        kind_map = {
+            "message":     MessageItem,
+            "tool_call":   ToolCallItem,
+            "tool_result": ToolResultItem,
+            "event":       EventItem,
+            "summary":     SummaryItem,
+        }
+
+        self.items = [
+            kind_map[item["kind"]].model_validate(item)
+            for item in raw
+            if item["kind"] in kind_map
+        ]
+        return True
+
+    def messages_for_llm(self) -> list[dict[str, Any]]:
         """Build the chat-completion view sent to the model."""
 
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, Any]] = []
 
         for item in self.items:
             if isinstance(item, SummaryItem):
@@ -154,13 +179,29 @@ class ChatContext:
                 )
             elif isinstance(item, MessageItem):
                 messages.append({"role": item.role, "content": item.content})
+            elif isinstance(item, ToolCallItem):
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "name": item.name,
+                                    "arguments": item.arguments,
+                                }
+                            }
+                        ],
+                    }
+                )
+            elif isinstance(item, ToolResultItem):
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": item.error if item.error else str(item.result),
+                    }
+                )
 
-        self._emit(
-            "memory.context_built",
-            message_count=len(messages),
-            total_item_count=len(self.items),
-            messages=messages,
-        )
         return messages
 
     def compact(self, max_items: int) -> None:
@@ -175,12 +216,15 @@ class ChatContext:
             for item in self.items
             if isinstance(item, MessageItem) and item.role == "system"
         ]
-        recent_items = self.items[-max_items:]
+        non_system = [
+            item
+            for item in self.items
+            if item not in system_messages
+        ]
+        recent_non_system = non_system[-max_items:]
 
         before_count = len(self.items)
-        self.items = system_messages + [
-            item for item in recent_items if item not in system_messages
-        ]
+        self.items = system_messages + recent_non_system
         self._emit(
             "memory.compacted",
             before_count=before_count,
