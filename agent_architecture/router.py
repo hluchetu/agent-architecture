@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from agent_architecture.agent import Agent
 from agent_architecture.config import Settings
-from agent_architecture.llm import OllamaClient
+from agent_architecture.llm import LLMClient, create_llm_client
 from agent_architecture.observability import EventLog
+from agent_architecture.observability.tokens import TokenTracker
 from agent_architecture.orchestrator import Orchestrator
 from agent_architecture.prompts import REACT_SYSTEM_PROMPT
 from agent_architecture.tools import MemoryLookupTool
@@ -25,10 +26,16 @@ class Router:
         self,
         settings: Settings | None = None,
         event_log: EventLog | None = None,
+        token_tracker: TokenTracker | None = None,
     ) -> None:
         self.settings = settings or Settings()
         self.event_log = event_log
-        self.llm = OllamaClient(self.settings, event_log=self.event_log)
+        self.token_tracker = token_tracker
+        self.llm: LLMClient = create_llm_client(
+            self.settings,
+            event_log=self.event_log,
+            token_tracker=self.token_tracker,
+        )
 
     async def _classify(self, task: str) -> str:
         response = await self.llm.chat([
@@ -45,17 +52,19 @@ class Router:
             orchestrator = Orchestrator(
                 settings=self.settings,
                 event_log=self.event_log,
+                token_tracker=self.token_tracker,
             )
             return await orchestrator.run(task)
 
         if classification == "tool":
             agent = Agent(
                 name="tool-agent",
-                system_prompt=REACT_SYSTEM_PROMPT,
+                system_prompt="",
                 settings=self.settings,
-                tools=[MemoryLookupTool()],
                 event_log=self.event_log,
+                token_tracker=self.token_tracker,
             )
+            await agent.initialize(REACT_SYSTEM_PROMPT)
             return await agent.run(task)
 
         response = await self.llm.chat([

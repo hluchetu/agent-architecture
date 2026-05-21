@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from agent_architecture.config import Settings
-from agent_architecture.llm import OllamaClient
+from agent_architecture.llm import LLMClient, create_llm_client
 
 
 JUDGE_PROMPT = """You are an expert evaluator scoring an AI agent's answer.
@@ -27,7 +27,7 @@ class Evaluator:
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or Settings()
-        self.llm = OllamaClient(self.settings)
+        self.llm: LLMClient = create_llm_client(self.settings)
 
     async def evaluate(
         self,

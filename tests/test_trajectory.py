@@ -41,7 +41,7 @@ async def run_agent_loop(
                 name = fn["name"]
                 arguments = fn["arguments"]
 
-                tool_call_item = context.add_tool_call(name, arguments, turn_id=turn_id)
+                tool_call_item = await context.add_tool_call(name, arguments, turn_id=turn_id)
 
                 tool = registry.get(name)
                 if tool is None:
@@ -49,9 +49,9 @@ async def run_agent_loop(
                 else:
                     result = await tool.execute(arguments)
 
-                context.add_tool_result(tool_call_item.id, result, turn_id=turn_id)
+                await context.add_tool_result(tool_call_item.id, result, turn_id=turn_id)
         else:
-            context.add_message("assistant", response.content, turn_id=turn_id)
+            await context.add_message("assistant", response.content, turn_id=turn_id)
             return response.content
 
 
@@ -77,7 +77,7 @@ async def test_agent_calls_tool_then_answers():
     ])
 
     turn_id = context.new_turn_id()
-    context.add_message("user", "What is episodic memory?", turn_id=turn_id)
+    await context.add_message("user", "What is episodic memory?", turn_id=turn_id)
     reply = await run_agent_loop(context, mock, registry, turn_id)
 
     assert reply == "Episodic memory stores past conversations."
@@ -103,7 +103,7 @@ async def test_tool_result_stored_in_context():
     ])
 
     turn_id = context.new_turn_id()
-    context.add_message("user", "What is short-term memory?", turn_id=turn_id)
+    await context.add_message("user", "What is short-term memory?", turn_id=turn_id)
     await run_agent_loop(context, mock, registry, turn_id)
 
     tool_calls = [i for i in context.items if isinstance(i, ToolCallItem)]
@@ -132,7 +132,7 @@ async def test_agent_handles_missing_tool_gracefully():
     ])
 
     turn_id = context.new_turn_id()
-    context.add_message("user", "Use a tool", turn_id=turn_id)
+    await context.add_message("user", "Use a tool", turn_id=turn_id)
     reply = await run_agent_loop(context, mock, registry, turn_id)
 
     tool_results = [i for i in context.items if isinstance(i, ToolResultItem)]
@@ -148,7 +148,7 @@ async def test_agent_answers_directly_without_tool():
     ])
 
     turn_id = context.new_turn_id()
-    context.add_message("user", "Say hello", turn_id=turn_id)
+    await context.add_message("user", "Say hello", turn_id=turn_id)
     reply = await run_agent_loop(context, mock, registry, turn_id)
 
     assert reply == "Hello! How can I help?"
@@ -183,7 +183,7 @@ async def test_multiple_tool_calls_in_sequence():
     ])
 
     turn_id = context.new_turn_id()
-    context.add_message("user", "Compare short and long term memory", turn_id=turn_id)
+    await context.add_message("user", "Compare short and long term memory", turn_id=turn_id)
     reply = await run_agent_loop(context, mock, registry, turn_id)
 
     tool_calls = [i for i in context.items if isinstance(i, ToolCallItem)]

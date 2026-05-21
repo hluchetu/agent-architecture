@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from uuid import uuid4
 
@@ -35,6 +36,7 @@ class ChatContext:
         self.items: list[ContextItem] = []
         self.event_log = event_log
         self.max_context_items = max_context_items
+        self._lock = asyncio.Lock()
 
     def _emit(
         self,
@@ -58,22 +60,23 @@ class ChatContext:
             )
         )
 
-    def _append(self, item: ContextItem) -> None:
-        self.items.append(item)
-        self._emit(
-            "memory.item_added",
-            item,
-            item_kind=item.kind,
-            item_id=item.id,
-            item=item.model_dump(mode="json"),
-        )
-        if len(self.items) > self.max_context_items:
-            self.compact(self.max_context_items)
+    async def _append(self, item: ContextItem) -> None:
+        async with self._lock:
+            self.items.append(item)
+            self._emit(
+                "memory.item_added",
+                item,
+                item_kind=item.kind,
+                item_id=item.id,
+                item=item.model_dump(mode="json"),
+            )
+            if len(self.items) > self.max_context_items:
+                self.compact(self.max_context_items)
 
     def new_turn_id(self) -> str:
         return str(uuid4())
 
-    def add_message(
+    async def add_message(
         self,
         role: Role,
         content: str,
@@ -86,10 +89,10 @@ class ChatContext:
             role=role,
             content=content,
         )
-        self._append(item)
+        await self._append(item)
         return item
 
-    def add_tool_call(
+    async def add_tool_call(
         self,
         name: str,
         arguments: dict[str, Any],
@@ -102,10 +105,10 @@ class ChatContext:
             name=name,
             arguments=arguments,
         )
-        self._append(item)
+        await self._append(item)
         return item
 
-    def add_tool_result(
+    async def add_tool_result(
         self,
         tool_call_id: str,
         result: dict[str, Any],
@@ -120,10 +123,10 @@ class ChatContext:
             result=result,
             error=error,
         )
-        self._append(item)
+        await self._append(item)
         return item
 
-    def add_event(
+    async def add_event(
         self,
         name: str,
         data: dict[str, Any] | None = None,
@@ -136,12 +139,12 @@ class ChatContext:
             name=name,
             data=data or {},
         )
-        self._append(item)
+        await self._append(item)
         return item
 
-    def add_summary(self, content: str) -> SummaryItem:
+    async def add_summary(self, content: str) -> SummaryItem:
         item = SummaryItem(session_id=self.session_id, content=content)
-        self._append(item)
+        await self._append(item)
         return item
 
     def resume(self, store: SessionStore) -> bool:
@@ -216,11 +219,7 @@ class ChatContext:
             for item in self.items
             if isinstance(item, MessageItem) and item.role == "system"
         ]
-        non_system = [
-            item
-            for item in self.items
-            if item not in system_messages
-        ]
+        non_system = [item for item in self.items if item not in system_messages]
         recent_non_system = non_system[-max_items:]
 
         before_count = len(self.items)

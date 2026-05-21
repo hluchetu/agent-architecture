@@ -17,7 +17,7 @@ class MockLLMClient:
 
 
 class MockEvaluator:
-    """Evaluator that returns a fixed score — for testing the scoring logic."""
+    """Evaluator that scores by keyword matching — no LLM needed."""
 
     async def evaluate(self, question: str, answer: str, rubric: str) -> int:
         keywords = rubric.lower().split(",")
@@ -78,17 +78,17 @@ async def test_full_agent_answer_scored():
     ])
 
     turn_id = context.new_turn_id()
-    context.add_message("user", "What is working memory?", turn_id=turn_id)
+    await context.add_message("user", "What is working memory?", turn_id=turn_id)
 
     while True:
         response = await mock_llm.chat(context.messages_for_llm(), tools=registry.schemas())
         if response.is_tool_call:
             for tc in response.tool_calls:
                 fn = tc["function"]
-                tool_call_item = context.add_tool_call(fn["name"], fn["arguments"], turn_id=turn_id)
+                tool_call_item = await context.add_tool_call(fn["name"], fn["arguments"], turn_id=turn_id)
                 tool = registry.get(fn["name"])
                 result = await tool.execute(fn["arguments"]) if tool else {"error": "not found"}
-                context.add_tool_result(tool_call_item.id, result, turn_id=turn_id)
+                await context.add_tool_result(tool_call_item.id, result, turn_id=turn_id)
         else:
             reply = response.content
             break

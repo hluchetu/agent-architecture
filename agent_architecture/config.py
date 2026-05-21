@@ -19,9 +19,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    inference_engine: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma3:4b"
     ollama_embedding_model: str = "nomic-embed-text"
     ollama_timeout_seconds: float = 120.0
+    ollama_max_concurrency: int = Field(default=3, ge=1)
     max_context_items: int = Field(default=20, ge=1)
 

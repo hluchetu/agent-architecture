@@ -1,91 +1,77 @@
 from __future__ import annotations
 
+import logging
+
+import structlog
+
 from agent_architecture.observability.events import ObservabilityEvent
 
 
+def configure_logging(level: int = logging.INFO) -> None:
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.stdlib.add_log_level,
+            structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
+    logging.basicConfig(level=level)
+
+
 class EventLog:
-    """Records observability events in a human-readable format."""
+    """Records observability events as structured JSON logs."""
+
+    def __init__(self) -> None:
+        self._log = structlog.get_logger("agent_architecture")
 
     def emit(self, event: ObservabilityEvent) -> None:
+        log = self._log.bind(
+            event=event.name,
+            session_id=event.session_id,
+            turn_id=event.turn_id,
+        )
+
         if event.name == "memory.item_added":
-            self._print_memory_item(event)
+            log.info(
+                event.name,
+                item_kind=event.payload.get("item_kind"),
+                item_id=event.payload.get("item_id"),
+            )
             return
 
         if event.name == "memory.context_built":
-            print(
-                "[memory.context_built] "
-                f"messages={event.payload['message_count']} "
-                f"items={event.payload['total_item_count']}"
+            log.info(
+                event.name,
+                message_count=event.payload.get("message_count"),
+                total_item_count=event.payload.get("total_item_count"),
             )
             return
 
         if event.name == "memory.compacted":
-            print(
-                "[memory.compacted] "
-                f"before={event.payload['before_count']} "
-                f"after={event.payload['after_count']} "
-                f"max_items={event.payload['max_items']}"
+            log.info(
+                event.name,
+                before_count=event.payload.get("before_count"),
+                after_count=event.payload.get("after_count"),
+                max_items=event.payload.get("max_items"),
             )
             return
 
         if event.name == "llm.request":
-            print(
-                "[llm.request] "
-                f"model={event.payload['model']} "
-                f"messages={event.payload['message_count']}"
+            log.info(
+                event.name,
+                model=event.payload.get("model"),
+                message_count=event.payload.get("message_count"),
             )
             return
 
         if event.name == "llm.response":
-            print(
-                "[llm.response] "
-                f"model={event.payload['model']} "
-                f"content={event.payload['content']!r}"
+            log.info(
+                event.name,
+                model=event.payload.get("model"),
+                content=event.payload.get("content"),
             )
             return
 
-        print(f"[{event.name}] {event.payload}")
-
-    def _print_memory_item(self, event: ObservabilityEvent) -> None:
-        item = event.payload["item"]
-        kind = event.payload["item_kind"]
-        turn = event.turn_id or "-"
-
-        if kind == "message":
-            print(
-                "[memory.item_added] "
-                f"kind=message turn={turn} "
-                f"role={item['role']} "
-                f"content={item['content']!r}"
-            )
-            return
-
-        if kind == "tool_call":
-            print(
-                "[memory.item_added] "
-                f"kind=tool_call turn={turn} "
-                f"name={item['name']} "
-                f"arguments={item['arguments']}"
-            )
-            return
-
-        if kind == "tool_result":
-            print(
-                "[memory.item_added] "
-                f"kind=tool_result turn={turn} "
-                f"tool_call_id={item['tool_call_id']} "
-                f"result={item['result']} "
-                f"error={item['error']}"
-            )
-            return
-
-        if kind == "event":
-            print(
-                "[memory.item_added] "
-                f"kind=event turn={turn} "
-                f"name={item['name']} "
-                f"data={item['data']}"
-            )
-            return
-
-        print(f"[memory.item_added] kind={kind} turn={turn} item={item}")
+        log.info(event.name, **event.payload)
